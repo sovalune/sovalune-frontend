@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 interface LearningCycle {
   id: string
   project_id: string
   status: string
   origin_task_id: string
-  failure_reason: string | null
   retry_count: number
   confidence_score: number | null
   created_at: string
-  updated_at: string
 }
 
 const statusSteps = ['detected', 'researching', 'verifying', 'practicing', 'testing', 'applying', 'completed']
@@ -19,7 +18,7 @@ const statusSteps = ['detected', 'researching', 'verifying', 'practicing', 'test
 export default function LearningCyclesPage() {
   const [cycles, setCycles] = useState<LearningCycle[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState({ status: '' })
+  const [filter, setFilter] = useState({ projectId: '' })
 
   useEffect(() => {
     fetchCycles()
@@ -29,7 +28,7 @@ export default function LearningCyclesPage() {
     setLoading(true)
     try {
       const params = new URLSearchParams()
-      if (filter.status) params.set('status', filter.status)
+      if (filter.projectId) params.set('project_id', filter.projectId)
       
       const res = await fetch(`/api/v1/learning-cycles?${params}`)
       const data = await res.json()
@@ -55,52 +54,59 @@ export default function LearningCyclesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-8">
+    <div className="p-8">
       <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-bold mb-8 text-sovalune-400">Learning Cycles</h1>
         
-        <div className="flex gap-4 mb-6">
-          <select
-            value={filter.status}
-            onChange={e => setFilter({ ...filter, status: e.target.value })}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2"
-          >
-            <option value="">All Statuses</option>
-            {statusSteps.map(status => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-            <option value="failed">failed</option>
-          </select>
+        <div className="mb-6">
+          <input
+            type="text"
+            value={filter.projectId}
+            onChange={e => setFilter(prev => ({ ...prev, projectId: e.target.value }))}
+            placeholder="Filter by Project ID"
+            className="w-full bg-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-sovalune-500"
+          />
         </div>
         
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading...</div>
         ) : cycles.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">No learning cycles found</div>
+          <div className="text-center py-12 text-gray-500">
+            <div className="text-4xl mb-4">📚</div>
+            <div className="text-lg">No learning cycles found</div>
+            <div className="text-sm mt-2">Start a conversation to trigger learning</div>
+          </div>
         ) : (
           <div className="space-y-4">
             {cycles.map(cycle => (
-              <div
+              <Link
                 key={cycle.id}
-                className="bg-gray-900/50 border border-gray-800 rounded-lg p-6"
+                href={`/learning-cycles/${cycle.id}`}
+                className="block bg-gray-900/50 border border-gray-800 rounded-lg p-6 hover:border-sovalune-500 transition-colors"
               >
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(cycle.status)}`}>
-                      {cycle.status}
-                    </span>
-                    <span className="text-gray-500 text-sm">
-                      Retry: {cycle.retry_count}/3
-                    </span>
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`px-3 py-1 rounded-full text-sm ${getStatusColor(cycle.status)}`}>
+                        {cycle.status}
+                      </span>
+                      <span className="text-sm text-gray-500">
+                        Retry: {cycle.retry_count}/3
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      ID: {cycle.id.slice(0, 8)}...
+                    </div>
                   </div>
-                  {cycle.confidence_score && (
-                    <span className="text-gray-500 text-sm">
-                      Confidence: {(cycle.confidence_score * 100).toFixed(0)}%
-                    </span>
-                  )}
+                  <div className="text-right text-sm text-gray-500">
+                    {cycle.confidence_score && (
+                      <div>Confidence: {(cycle.confidence_score * 100).toFixed(0)}%</div>
+                    )}
+                    <div>{new Date(cycle.created_at).toLocaleDateString()}</div>
+                  </div>
                 </div>
                 
-                <div className="flex items-center gap-1 mb-4">
+                <div className="flex items-center gap-1">
                   {statusSteps.map((step, index) => (
                     <div key={step} className="flex items-center">
                       <div
@@ -124,17 +130,12 @@ export default function LearningCyclesPage() {
                     </div>
                   ))}
                 </div>
-                
-                {cycle.failure_reason && (
-                  <div className="text-red-400 text-sm mb-2">
-                    Failure: {cycle.failure_reason}
-                  </div>
-                )}
-                
-                <div className="text-xs text-gray-600">
-                  Created: {new Date(cycle.created_at).toLocaleString()}
+                <div className="flex justify-between mt-2 text-xs text-gray-500">
+                  {statusSteps.map(step => (
+                    <div key={step} className="w-8 text-center capitalize">{step.slice(0, 4)}</div>
+                  ))}
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

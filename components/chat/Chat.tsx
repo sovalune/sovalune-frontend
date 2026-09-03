@@ -30,11 +30,15 @@ export default function Chat() {
   const [isConnected, setIsConnected] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [sessionId, setSessionId] = useState<string>('')
+  const [projectId, setProjectId] = useState<string>('')
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setSessionId(crypto.randomUUID())
+    const newSessionId = crypto.randomUUID()
+    const newProjectId = crypto.randomUUID()
+    setSessionId(newSessionId)
+    setProjectId(newProjectId)
   }, [])
 
   useEffect(() => {
@@ -44,12 +48,17 @@ export default function Chat() {
   const connectWebSocket = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
     
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/ws/chat'
-    const ws = new WebSocket(wsUrl)
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8091'
+    const ws = new WebSocket(`${wsUrl}/ws/chat`)
 
     ws.onopen = () => {
       console.log('WebSocket connected')
       setIsConnected(true)
+      ws.send(JSON.stringify({ 
+        type: 'join_session', 
+        session_id: sessionId,
+        project_id: projectId 
+      }))
     }
 
     ws.onmessage = (event) => {
@@ -59,7 +68,7 @@ export default function Chat() {
         case 'token':
           setMessages(prev => {
             const lastMsg = prev[prev.length - 1]
-            if (lastMsg && lastMsg.role === 'assistant') {
+            if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.toolCall) {
               return [
                 ...prev.slice(0, -1),
                 { ...lastMsg, content: lastMsg.content + (data.delta || '') }
@@ -121,7 +130,7 @@ export default function Chat() {
     }
 
     wsRef.current = ws
-  }, [])
+  }, [sessionId, projectId])
 
   useEffect(() => {
     connectWebSocket()
@@ -130,7 +139,7 @@ export default function Chat() {
     }
   }, [connectWebSocket])
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!input.trim() || !wsRef.current || isGenerating) return
 
     const userMessage: Message = {
@@ -152,6 +161,7 @@ export default function Chat() {
     wsRef.current.send(JSON.stringify({
       type: 'user_message',
       session_id: sessionId,
+      project_id: projectId,
       content: input,
     }))
 
