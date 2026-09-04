@@ -20,21 +20,20 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const fetchMessages = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/v1/sessions/${id}/messages`)
+        const data = await res.json()
+        setMessages(data.data || [])
+      } catch (error) {
+        console.error('Failed to fetch messages:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
     fetchMessages()
   }, [id])
-
-  const fetchMessages = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/v1/sessions/${id}/messages`)
-      const data = await res.json()
-      setMessages(data.data || [])
-    } catch (error) {
-      console.error('Failed to fetch messages:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const roleColors: Record<string, string> = {
     user: 'bg-sovalune-600',
