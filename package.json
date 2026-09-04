@@ -15,7 +15,9 @@
     "react-dom": "^18.2.0",
     "@monaco-editor/react": "^4.6.0",
     "ai": "^3.0.0",
-    "swr": "^2.2.0"
+    "swr": "^2.2.0",
+    "react-markdown": "^9.0.0",
+    "@tailwindcss/typography": "^0.5.10"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

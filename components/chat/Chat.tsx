@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 interface Message {
   id: string
@@ -310,6 +311,34 @@ export default function Chat() {
                   <pre className="text-xs text-gray-400 overflow-x-auto">
                     {JSON.stringify(msg.toolCall.arguments, null, 2)}
                   </pre>
+                </div>
+              ) : msg.role === 'assistant' ? (
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown
+                    components={{
+                      code({ className, children, ...props }) {
+                        const match = /language-(\w+)/.exec(className || '')
+                        const isInline = !match
+                        return isInline ? (
+                          <code className={className} {...props}>{children}</code>
+                        ) : (
+                          <div className="relative">
+                            <div className="absolute top-2 right-2 text-xs text-gray-500">
+                              {match[1]}
+                            </div>
+                            <pre className={className}>
+                              <code className={className} {...props}>{children}</code>
+                            </pre>
+                          </div>
+                        )
+                      }
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+                  {isGenerating && msg === messages[messages.length - 1] && (
+                    <span className="inline-block w-2 h-4 ml-1 bg-sovalune-500 animate-pulse" />
+                  )}
                 </div>
               ) : (
                 <div className="whitespace-pre-wrap">{msg.content}</div>
