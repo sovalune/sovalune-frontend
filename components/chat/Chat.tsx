@@ -31,22 +31,46 @@ export default function Chat() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [sessionId, setSessionId] = useState<string>('')
   const [projectId, setProjectId] = useState<string>('')
+  const [isInitializing, setIsInitializing] = useState(true)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const newSessionId = crypto.randomUUID()
-    const newProjectId = crypto.randomUUID()
-    setSessionId(newSessionId)
-    setProjectId(newProjectId)
-  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const initSession = useCallback(async () => {
+    try {
+      const projectRes = await fetch('/api/v1/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Chat Session' }),
+      })
+      const projectData = await projectRes.json()
+      const pId = projectData.id
+      setProjectId(pId)
+
+      const sessionRes = await fetch('/api/v1/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_id: pId }),
+      })
+      const sessionData = await sessionRes.json()
+      setSessionId(sessionData.id)
+      setIsInitializing(false)
+    } catch (error) {
+      console.error('Failed to init session:', error)
+      setIsInitializing(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    initSession()
+  }, [initSession])
+
   const connectWebSocket = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
+    if (!sessionId || !projectId) return
     
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8091'
     const ws = new WebSocket(`${wsUrl}/ws/chat`)
@@ -133,14 +157,16 @@ export default function Chat() {
   }, [sessionId, projectId])
 
   useEffect(() => {
-    connectWebSocket()
+    if (sessionId && projectId) {
+      connectWebSocket()
+    }
     return () => {
       wsRef.current?.close()
     }
-  }, [connectWebSocket])
+  }, [connectWebSocket, sessionId, projectId])
 
   const sendMessage = async () => {
-    if (!input.trim() || !wsRef.current || isGenerating) return
+    if (!input.trim() || !wsRef.current || isGenerating || !sessionId || !projectId) return
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -175,11 +201,34 @@ export default function Chat() {
     }
   }
 
+  const startNewSession = async () => {
+    wsRef.current?.close()
+    setMessages([])
+    setIsInitializing(true)
+    await initSession()
+  }
+
+  if (isInitializing) {
+    return (
+      <div className="flex items-center justify-center h-[600px] bg-gray-900/50 rounded-lg border border-gray-800">
+        <div className="text-gray-500">Initializing session...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-[600px] bg-gray-900/50 rounded-lg border border-gray-800">
       <div className="p-3 border-b border-gray-800 flex items-center justify-between">
-        <div className="text-sm text-gray-500">
-          Session: {sessionId.slice(0, 8)}...
+        <div className="flex items-center gap-4">
+          <div className="text-sm text-gray-500">
+            Session: {sessionId.slice(0, 8)}...
+          </div>
+          <button
+            onClick={startNewSession}
+            className="text-xs text-sovalune-400 hover:text-sovalune-300 transition-colors"
+          >
+            New Session
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>

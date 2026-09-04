@@ -19,13 +19,15 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState({ tier: '', projectId: '' })
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<MemoryEntry[] | null>(null)
 
   useEffect(() => {
     fetchMemories()
-  }, [filter])
+  }, [filter.tier])
 
   const fetchMemories = async () => {
     setLoading(true)
+    setSearchResults(null)
     try {
       const params = new URLSearchParams()
       if (filter.projectId) params.set('project_id', filter.projectId)
@@ -42,18 +44,18 @@ export default function MemoryPage() {
   }
 
   const searchMemories = async () => {
-    if (!searchQuery.trim() || !filter.projectId) return
+    if (!searchQuery.trim()) return
     
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        project_id: filter.projectId,
-        query: searchQuery,
-      })
+      const params = new URLSearchParams()
+      if (filter.projectId) params.set('project_id', filter.projectId)
+      params.set('q', searchQuery)
+      params.set('limit', '50')
       
-      const res = await fetch(`/api/v1/memory/search?${params}`)
+      const res = await fetch(`/api/v1/memory?${params}`)
       const data = await res.json()
-      setMemories(data.data || [])
+      setSearchResults(data.data || [])
     } catch (error) {
       console.error('Failed to search memories:', error)
     } finally {
@@ -67,6 +69,8 @@ export default function MemoryPage() {
     verified: 'bg-green-900/30 text-green-400',
   }
 
+  const displayList = searchResults !== null ? searchResults : memories
+
   return (
     <div className="p-8">
       <div className="max-w-6xl mx-auto">
@@ -77,7 +81,7 @@ export default function MemoryPage() {
             type="text"
             value={filter.projectId}
             onChange={e => setFilter(prev => ({ ...prev, projectId: e.target.value }))}
-            placeholder="Project ID"
+            placeholder="Project ID (optional)"
             className="bg-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-sovalune-500"
           />
           <select
@@ -95,22 +99,35 @@ export default function MemoryPage() {
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              placeholder="Search query"
+              onKeyDown={e => { if (e.key === 'Enter') searchMemories() }}
+              placeholder="Search content..."
               className="flex-1 bg-gray-800 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-sovalune-500"
             />
             <button
               onClick={searchMemories}
-              disabled={!filter.projectId || !searchQuery.trim()}
+              disabled={!searchQuery.trim()}
               className="bg-sovalune-600 hover:bg-sovalune-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors"
             >
               Search
             </button>
           </div>
         </div>
+
+        {searchResults !== null && (
+          <div className="mb-4 flex items-center gap-2">
+            <span className="text-sm text-gray-500">Found {searchResults.length} results for &quot;{searchQuery}&quot;</span>
+            <button
+              onClick={() => { setSearchResults(null); setSearchQuery('') }}
+              className="text-sm text-sovalune-400 hover:text-sovalune-300"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
         
         {loading ? (
           <div className="text-center py-12 text-gray-500">Loading...</div>
-        ) : memories.length === 0 ? (
+        ) : displayList.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <div className="text-4xl mb-4">🧠</div>
             <div className="text-lg">No memories found</div>
@@ -118,7 +135,7 @@ export default function MemoryPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {memories.map(memory => (
+            {displayList.map(memory => (
               <Link
                 key={memory.id}
                 href={`/memory/${memory.id}`}
