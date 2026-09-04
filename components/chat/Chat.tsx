@@ -24,6 +24,14 @@ interface WebSocketMessage {
   message?: string
 }
 
+function getWsUrl(): string {
+  if (typeof window === 'undefined') return ''
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = process.env.NEXT_PUBLIC_WS_HOST || window.location.hostname
+  const port = process.env.NEXT_PUBLIC_WS_PORT || '8091'
+  return `${protocol}//${host}:${port}`
+}
+
 export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -32,8 +40,10 @@ export default function Chat() {
   const [sessionId, setSessionId] = useState<string>('')
   const [projectId, setProjectId] = useState<string>('')
   const [isInitializing, setIsInitializing] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -46,6 +56,11 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Chat Session' }),
       })
+      
+      if (!projectRes.ok) {
+        throw new Error('Failed to create project')
+      }
+      
       const projectData = await projectRes.json()
       const pId = projectData.id
       setProjectId(pId)
@@ -55,11 +70,18 @@ export default function Chat() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_id: pId }),
       })
+      
+      if (!sessionRes.ok) {
+        throw new Error('Failed to create session')
+      }
+      
       const sessionData = await sessionRes.json()
       setSessionId(sessionData.id)
       setIsInitializing(false)
-    } catch (error) {
-      console.error('Failed to init session:', error)
+      setError(null)
+    } catch (err) {
+      console.error('Failed to init session:', err)
+      setError('Failed to connect to backend. Make sure the server is running.')
       setIsInitializing(false)
     }
   }, [])
@@ -72,12 +94,13 @@ export default function Chat() {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
     if (!sessionId || !projectId) return
     
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8091'
+    const wsUrl = getWsUrl()
     const ws = new WebSocket(`${wsUrl}/ws/chat`)
 
     ws.onopen = () => {
       console.log('WebSocket connected')
       setIsConnected(true)
+      setError(null)
       ws.send(JSON.stringify({ 
         type: 'join_session', 
         session_id: sessionId,
@@ -146,7 +169,10 @@ export default function Chat() {
     ws.onclose = () => {
       console.log('WebSocket disconnected')
       setIsConnected(false)
-      setTimeout(connectWebSocket, 3000)
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+      reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000)
     }
 
     ws.onerror = (error) => {
@@ -161,6 +187,9 @@ export default function Chat() {
       connectWebSocket()
     }
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
       wsRef.current?.close()
     }
   }, [connectWebSocket, sessionId, projectId])
@@ -212,6 +241,20 @@ export default function Chat() {
     return (
       <div className="flex items-center justify-center h-[600px] bg-gray-900/50 rounded-lg border border-gray-800">
         <div className="text-gray-500">Initializing session...</div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[600px] bg-gray-900/50 rounded-lg border border-gray-800">
+        <div className="text-red-400 mb-4">{error}</div>
+        <button
+          onClick={startNewSession}
+          className="bg-sovalune-600 hover:bg-sovalune-700 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          Retry
+        </button>
       </div>
     )
   }
